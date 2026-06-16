@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Tokens semánticos — claro / oscuro
+   El host pone class="dark" o class="light" en <html>.
+   Sin clase, seguimos prefers-color-scheme.
+   El truco :root:not(.light) permite forzar claro siempre.
+   ============================================================ */
+
+:root {
+  /* Claro (default) */
+  --surface: #ffffff;
+  --card: #ffffff;
+  --line: #ededed;
+  --line-strong: #e5e5e5;
+  --ink: #260700;
+  --label: #585858;
+  --muted: #868686;
+  --tintor: #c04200;
+  --tintamber: #bc5f09;
+  --tintrosa: #d9077a;
+  --tintok: #2e7d32;
+  --btn: #ff632b;
+  --btn-hover: #eb3f00;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --surface: #0a0a0a;
+    --card: #161616;
+    --line: #262626;
+    --line-strong: #303030;
+    --ink: #f8f2e8;
+    --label: #c9c9c9;
+    --muted: #9a9a9a;
+    --tintor: #fe872d;
+    --tintamber: #f0a94a;
+    --tintrosa: #fe64a3;
+    --tintok: #5bc46a;
+    --btn: hsl(25 99% 58%);
+    --btn-hover: hsl(25 99% 48%);
+  }
+}
+
+:root.dark {
+  --surface: #0a0a0a;
+  --card: #161616;
+  --line: #262626;
+  --line-strong: #303030;
+  --ink: #f8f2e8;
+  --label: #c9c9c9;
+  --muted: #9a9a9a;
+  --tintor: #fe872d;
+  --tintamber: #f0a94a;
+  --tintrosa: #fe64a3;
+  --tintok: #5bc46a;
+  --btn: hsl(25 99% 58%);
+  --btn-hover: hsl(25 99% 48%);
+}
+
+/* ============================================================
+   Theme de Tailwind v4 — mapea tokens a utilidades.
+   Los componentes usan bg-surface / text-ink / border-line…,
+   nunca hex crudos. Por eso el tema "se da vuelta solo".
+   ============================================================ */
+
+@theme inline {
+  /* Paleta de marca — fija, no cambia con el tema */
+  --color-lienzo: #f8f2e8;
+  --color-brasa: #260700;
+  --color-horizonte: #ff632b;
+  --color-solar: #fe872d;
+  --color-energia: #fe64a3;
+
+  /* Tokens semánticos (flipean con el tema) */
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-label: var(--label);
+  --color-muted: var(--muted);
+  --color-tintor: var(--tintor);
+  --color-tintamber: var(--tintamber);
+  --color-tintrosa: var(--tintrosa);
+  --color-tintok: var(--tintok);
+  --color-btn: var(--btn);
+  --color-btn-hover: var(--btn-hover);
+
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ============================================================
+   Base — ritmo del brandbook
+   ============================================================ */
+
+html {
+  background-color: var(--surface);
+}
+
+body {
+  background-color: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  font-feature-settings: "ss02" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   Gradiente de marca — siempre nace del borde inferior.
+   Regla del brandbook: nunca desde el centro.
+   ============================================================ */
+
+.brand-horizon {
+  background-image: radial-gradient(
+    120% 100% at 50% 100%,
+    var(--color-energia) 0%,
+    var(--color-horizonte) 28%,
+    var(--color-solar) 48%,
+    transparent 72%
+  );
+}
+
+/* Quita spinners de los inputs number */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm ls *)",
+      "Bash(npm run *)",
+      "Read(//tmp/**)",
+      "Skill(gstack)",
+      "Skill(gstack:*)",
+      "Bash(NEXT_PUBLIC_DEMO=1 NEXT_PUBLIC_BASE_PATH=/b2b-calculadora-demo npm run build)",
+      "Bash(chmod +x scripts/build-demo.sh scripts/deploy-demo.sh)",
+      "Bash(/Users/axelportillo-coderhouse/.claude/skills/gstack/browse/dist/browse goto *)",
+      "Bash(/Users/axelportillo-coderhouse/.claude/skills/gstack/browse/dist/browse console *)",
+      "Bash(/Users/axelportillo-coderhouse/.claude/skills/gstack/browse/dist/browse fill *)",
+      "Bash(/Users/axelportillo-coderhouse/.claude/skills/gstack/browse/dist/browse snapshot *)",
+      "Bash(pkill -f \"http.server 5055\")",
+      "Bash(rm -rf /tmp/pages-test)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(git config *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git -c 'user.name=Axel Portillo' -c user.email=axel.portillo@coderhouse.com commit -q -m ' *)"
+    ]
+  }
+}
