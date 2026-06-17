@@ -15,6 +15,7 @@ import {
   type Region,
 } from "@/lib/pricing";
 import { api } from "@/lib/api";
+import NextSteps from "@/components/NextSteps";
 
 // --- estilos de chip por tipo de producto (usa tokens de tinte) ---
 const TYPE_CHIP: Record<ProductType, string> = {
@@ -50,6 +51,7 @@ export default function Calculator() {
   const [result, setResult] = useState<QuoteResult | null>(null);
   const [sendState, setSendState] = useState<SendState>("idle");
   const [sendMessage, setSendMessage] = useState("");
+  const [ticketId, setTicketId] = useState("");
 
   const totalSeats = useMemo(
     () => Object.values(seats).reduce((a, b) => a + (b || 0), 0),
@@ -74,6 +76,19 @@ export default function Calculator() {
 
   function toggleProduct(id: string) {
     setSeatsFor(id, seats[id] > 0 ? 0 : 1);
+  }
+
+  function resetAll() {
+    setContact({ fullName: "", email: "", company: "", website: "" });
+    setRegion("AR");
+    setAlianzasCode("");
+    setSeats({});
+    setErrors({});
+    setResult(null);
+    setSendState("idle");
+    setSendMessage("");
+    setTicketId("");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }
 
   function validate(): boolean {
@@ -121,6 +136,7 @@ export default function Calculator() {
         },
       });
       if (data.ok) {
+        setTicketId(data.ticketId ?? "");
         setSendState("sent");
         setSendMessage(
           data.message ??
@@ -134,6 +150,19 @@ export default function Calculator() {
       setSendState("error");
       setSendMessage("No se pudo enviar la consulta. Intentá de nuevo.");
     }
+  }
+
+  // Envío exitoso → pantalla de próximos pasos
+  if (sendState === "sent" && result) {
+    return (
+      <NextSteps
+        fullName={contact.fullName}
+        company={contact.company}
+        result={result}
+        ticketId={ticketId}
+        onReset={resetAll}
+      />
+    );
   }
 
   return (

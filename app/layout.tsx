@@ -21,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={jakarta.variable} suppressHydrationWarning>
+    <html lang="es" className={jakarta.variable}>
       <body>{children}</body>
     </html>
   );

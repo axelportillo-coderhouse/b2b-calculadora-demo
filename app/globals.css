@@ -1,15 +1,12 @@
 @import "tailwindcss";
 
 /* ============================================================
-   Tokens semánticos — claro / oscuro
-   El host pone class="dark" o class="light" en <html>.
-   Sin clase, seguimos prefers-color-scheme.
-   El truco :root:not(.light) permite forzar claro siempre.
+   Tokens semánticos — tema claro institucional (sin dark mode).
+   La herramienta se integra a una página ya creada, no al sistema.
    ============================================================ */
 
 :root {
-  /* Claro (default) */
-  --surface: #ffffff;
+  --surface: #f9f3e9; /* fondo lienzo cálido */
   --card: #ffffff;
   --line: #ededed;
   --line-strong: #e5e5e5;
@@ -24,44 +21,10 @@
   --btn-hover: #eb3f00;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    --surface: #0a0a0a;
-    --card: #161616;
-    --line: #262626;
-    --line-strong: #303030;
-    --ink: #f8f2e8;
-    --label: #c9c9c9;
-    --muted: #9a9a9a;
-    --tintor: #fe872d;
-    --tintamber: #f0a94a;
-    --tintrosa: #fe64a3;
-    --tintok: #5bc46a;
-    --btn: hsl(25 99% 58%);
-    --btn-hover: hsl(25 99% 48%);
-  }
-}
-
-:root.dark {
-  --surface: #0a0a0a;
-  --card: #161616;
-  --line: #262626;
-  --line-strong: #303030;
-  --ink: #f8f2e8;
-  --label: #c9c9c9;
-  --muted: #9a9a9a;
-  --tintor: #fe872d;
-  --tintamber: #f0a94a;
-  --tintrosa: #fe64a3;
-  --tintok: #5bc46a;
-  --btn: hsl(25 99% 58%);
-  --btn-hover: hsl(25 99% 48%);
-}
-
 /* ============================================================
    Theme de Tailwind v4 — mapea tokens a utilidades.
    Los componentes usan bg-surface / text-ink / border-line…,
-   nunca hex crudos. Por eso el tema "se da vuelta solo".
+   nunca hex crudos.
    ============================================================ */
 
 @theme inline {
@@ -72,7 +35,7 @@
   --color-solar: #fe872d;
   --color-energia: #fe64a3;
 
-  /* Tokens semánticos (flipean con el tema) */
+  /* Tokens semánticos */
   --color-surface: var(--surface);
   --color-card: var(--card);
   --color-line: var(--line);
@@ -108,19 +71,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ============================================================
-   Gradiente de marca — siempre nace del borde inferior.
-   Regla del brandbook: nunca desde el centro.
-   ============================================================ */
+/* Tailwind v4 ya no pone cursor:pointer en <button> por defecto */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]) {
+  cursor: pointer;
+}
 
-.brand-horizon {
-  background-image: radial-gradient(
-    120% 100% at 50% 100%,
-    var(--color-energia) 0%,
-    var(--color-horizonte) 28%,
-    var(--color-solar) 48%,
-    transparent 72%
-  );
+button:disabled {
+  cursor: not-allowed;
 }
 
 /* Quita spinners de los inputs number */
