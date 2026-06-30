@@ -1,13 +1,16 @@
 // ============================================================
-// Generación del PDF de la cotización — 100% en el cliente
-// (funciona en el export estático, sin servidor).
-// Dibuja con la estética de marca: banda naranja, lienzo,
-// desglose de descuentos y total destacado.
+// Generación del PDF de la cotización — 100% en el cliente.
+//
+// Se arma un template HTML con los MISMOS tokens y la misma
+// tipografía (Plus Jakarta Sans) que la herramienta, y se
+// rasteriza con html2canvas → jsPDF. Así el PDF queda idéntico
+// en estilo a la tool.
 // ============================================================
 
 import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 import { formatMoney, type QuoteResult } from "./pricing";
-import { PRODUCT_TYPE_LABEL } from "./catalog";
+import { PRODUCT_TYPE_LABEL, type ProductType } from "./catalog";
 
 interface Contact {
   fullName: string;
@@ -16,22 +19,46 @@ interface Contact {
   website: string;
 }
 
-// Paleta de marca (RGB)
-const ORANGE: [number, number, number] = [255, 99, 43]; // horizonte
-const BRASA: [number, number, number] = [38, 7, 0];
-const LIENZO: [number, number, number] = [249, 243, 233];
-const MUTED: [number, number, number] = [134, 134, 134];
-const LABEL: [number, number, number] = [88, 88, 88];
-const LINE: [number, number, number] = [225, 225, 225];
-const OKGREEN: [number, number, number] = [46, 125, 50];
-const WHITE: [number, number, number] = [255, 255, 255];
+// Tokens de marca (mismos hex que globals.css)
+const C = {
+  lienzo: "#f9f3e9",
+  card: "#ffffff",
+  line: "#ededed",
+  ink: "#260700",
+  label: "#585858",
+  muted: "#868686",
+  ok: "#2e7d32",
+  okBg: "#eaf3eb",
+};
+
+// Chips por tipo (mismos colores que la tool)
+const CHIP: Record<ProductType, string> = {
+  curso: "background:#fbe7dd;color:#c04200;",
+  carrera: "background:#f6ecd8;color:#bc5f09;",
+  diplomatura: "background:#fbe1ee;color:#d9077a;",
+  workshop: "background:#e6f1e7;color:#2e7d32;",
+};
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
-function sanitize(s: string): string {
-  return s.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "cliente";
+function esc(s: string): string {
+  return (s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function safeFileName(s: string): string {
+  return (
+    (s || "")
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || "cotizacion"
+  );
 }
 
 export function quoteReference(email: string): string {
@@ -42,234 +69,188 @@ export function quoteReference(email: string): string {
   return "COT-" + base.toUpperCase();
 }
 
-export function generateQuotePdf(contact: Contact, quote: QuoteResult): void {
-  const doc = buildQuotePdf(contact, quote);
-  doc.save(`Cotizacion-Coderhouse-${sanitize(contact.company)}.pdf`);
+function field(label: string, value: string): string {
+  return `
+    <div style="font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:${C.muted};">${label}</div>
+    <div style="font-size:13px;font-weight:700;color:${C.ink};margin-top:3px;">${esc(value)}</div>`;
 }
 
-export function buildQuotePdf(contact: Contact, quote: QuoteResult): jsPDF {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const W = doc.internal.pageSize.getWidth(); // ~595
-  const M = 40; // margen
-  const right = W - M;
-  const currency = quote.currency;
+export function buildQuoteHtml(
+  contact: Contact,
+  quote: QuoteResult,
+  ref: string,
+  dateStr: string,
+): string {
+  const c = quote.currency;
 
+  const rows = quote.items
+    .map(
+      (li) => `
+    <tr>
+      <td style="padding:13px 0;border-bottom:1px solid ${C.line};vertical-align:top;">
+        <div style="font-size:13px;font-weight:700;color:${C.ink};">${esc(li.productName)}</div>
+        <span style="display:inline-block;margin-top:5px;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:600;${CHIP[li.productType]}">${PRODUCT_TYPE_LABEL[li.productType]}</span>
+      </td>
+      <td style="padding:13px 0;border-bottom:1px solid ${C.line};text-align:right;font-size:13px;color:${C.ink};vertical-align:top;">${li.seats}</td>
+      <td style="padding:13px 0;border-bottom:1px solid ${C.line};text-align:right;font-size:13px;color:${C.ink};vertical-align:top;">${formatMoney(li.finalPerSeat, c)}</td>
+      <td style="padding:13px 0;border-bottom:1px solid ${C.line};text-align:right;font-size:13px;font-weight:700;color:${C.ink};vertical-align:top;">${formatMoney(li.subtotal, c)}</td>
+    </tr>`,
+    )
+    .join("");
+
+  const breakdown = `
+    <tr>
+      <td style="padding:4px 0;font-size:12px;color:${C.muted};">Precio de lista</td>
+      <td style="padding:4px 0;text-align:right;font-size:12px;color:${C.muted};">${formatMoney(quote.listTotal, c)}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;font-size:12px;color:${C.label};">Descuento web (${pct(quote.webDiscount)})</td>
+      <td style="padding:4px 0;text-align:right;font-size:12px;color:#c04200;font-weight:600;">incluido</td>
+    </tr>
+    ${
+      quote.corporateDiscount > 0
+        ? `<tr>
+      <td style="padding:4px 0;font-size:12px;color:${C.label};">Corporativo +${pct(quote.corporateDiscount)} (${quote.totalSeats} cupos)</td>
+      <td style="padding:4px 0;text-align:right;font-size:12px;color:#bc5f09;font-weight:600;">aplicado</td>
+    </tr>`
+        : ""
+    }`;
+
+  const savings =
+    quote.totalSavings > 0
+      ? `<div style="color:${C.ok};font-size:11px;font-weight:600;margin-top:3px;">Ahorrás ${formatMoney(quote.totalSavings, c)} sobre el precio de lista</div>`
+      : "";
+
+  return `
+  <div style="width:100%;box-sizing:border-box;padding:36px 40px;background:${C.lienzo};font-family:var(--font-jakarta),'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;letter-spacing:-0.01em;color:${C.ink};">
+
+    <!-- Header -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:22px;">
+      <tr>
+        <td style="vertical-align:top;">
+          <div style="font-size:20px;font-weight:800;color:${C.ink};">Coderhouse <span style="font-weight:500;color:${C.muted};">Empresas</span></div>
+          <div style="font-size:12px;color:${C.muted};margin-top:3px;">Cotización de capacitación</div>
+        </td>
+        <td style="vertical-align:top;text-align:right;">
+          <div style="font-size:12px;font-weight:700;color:${C.ink};">${esc(ref)}</div>
+          <div style="font-size:11px;color:${C.muted};margin-top:3px;">${esc(dateStr)}</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Datos del cliente -->
+    <div style="background:${C.card};border:1px solid ${C.line};border-radius:16px;padding:20px 24px;margin-bottom:14px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="width:50%;padding:0 0 16px 0;vertical-align:top;">${field("Nombre", contact.fullName)}</td>
+          <td style="width:50%;padding:0 0 16px 0;vertical-align:top;">${field("Empresa", contact.company)}</td>
+        </tr>
+        <tr>
+          <td style="padding:0 0 16px 0;vertical-align:top;">${field("Email", contact.email)}</td>
+          <td style="padding:0 0 16px 0;vertical-align:top;">${field("Sitio web", contact.website || "—")}</td>
+        </tr>
+        <tr>
+          <td style="vertical-align:top;">${field("Origen", quote.region === "AR" ? "Argentina (ARS)" : "Exterior (USD)")}</td>
+          <td style="vertical-align:top;">${field("Personas", String(quote.totalSeats))}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Detalle -->
+    <div style="background:${C.card};border:1px solid ${C.line};border-radius:16px;padding:20px 24px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="padding-bottom:8px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:${C.muted};font-weight:700;">Producto</td>
+          <td style="padding-bottom:8px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:${C.muted};font-weight:700;text-align:right;">Cupos</td>
+          <td style="padding-bottom:8px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:${C.muted};font-weight:700;text-align:right;">Precio/persona</td>
+          <td style="padding-bottom:8px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:${C.muted};font-weight:700;text-align:right;">Subtotal</td>
+        </tr>
+        ${rows}
+      </table>
+
+      <!-- Desglose -->
+      <table style="width:auto;border-collapse:collapse;margin-top:16px;margin-left:auto;min-width:280px;">
+        ${breakdown}
+      </table>
+
+      <!-- Total -->
+      <table style="width:100%;border-collapse:collapse;margin-top:14px;">
+        <tr>
+          <td style="background:${C.okBg};border-radius:14px;padding:16px 20px;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="vertical-align:middle;font-size:14px;font-weight:700;color:${C.ink};">Total estimado</td>
+                <td style="vertical-align:middle;text-align:right;">
+                  <div style="font-size:26px;font-weight:800;color:${C.ink};line-height:1.1;">${formatMoney(quote.finalTotal, c)}</div>
+                  ${savings}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <div style="margin-top:16px;font-size:12px;color:${C.label};">
+        <span style="font-weight:700;">Forma de pago:</span> ${esc(quote.paymentNote)}
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top:18px;font-size:10px;color:${C.muted};">
+      Estimación orientativa según precios de lista vigentes. El equipo de empresas de Coderhouse confirma el presupuesto final.
+    </div>
+  </div>`;
+}
+
+export async function generateQuotePdf(
+  contact: Contact,
+  quote: QuoteResult,
+): Promise<void> {
+  const ref = quoteReference(contact.email);
   const dateStr = new Date().toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "long",
     year: "numeric",
   });
-  const ref = quoteReference(contact.email);
 
-  // ---------- Header (banda naranja) ----------
-  doc.setFillColor(...ORANGE);
-  doc.rect(0, 0, W, 92, "F");
+  const container = document.createElement("div");
+  container.style.position = "fixed";
+  container.style.left = "-10000px";
+  container.style.top = "0";
+  container.style.width = "800px";
+  container.innerHTML = buildQuoteHtml(contact, quote, ref, dateStr);
+  document.body.appendChild(container);
 
-  doc.setTextColor(...WHITE);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("Coderhouse", M, 46);
-  const chW = doc.getTextWidth("Coderhouse");
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(20);
-  doc.text("Empresas", M + chW + 7, 46);
+  try {
+    if (document.fonts?.ready) await document.fonts.ready;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text("Cotización de capacitación", M, 68);
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      backgroundColor: C.lienzo,
+      useCORS: true,
+      logging: false,
+    });
 
-  doc.setFontSize(9);
-  doc.text(ref, right, 40, { align: "right" });
-  doc.text(dateStr, right, 56, { align: "right" });
+    const img = canvas.toDataURL("image/png");
+    const pdf = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgH = (canvas.height * pageW) / canvas.width;
 
-  let y = 128;
-
-  // ---------- Datos del cliente ----------
-  sectionTitle(doc, "DATOS DEL CLIENTE", M, y);
-  y += 18;
-
-  const col2 = W / 2 + 10;
-  doc.setFontSize(10);
-  field(doc, "Nombre", contact.fullName, M, y);
-  field(doc, "Empresa", contact.company, col2, y);
-  y += 34;
-  field(doc, "Email", contact.email, M, y);
-  field(doc, "Sitio web", contact.website || "—", col2, y);
-  y += 34;
-  field(
-    doc,
-    "Origen",
-    quote.region === "AR" ? "Argentina (ARS)" : "Exterior (USD)",
-    M,
-    y,
-  );
-  field(doc, "Personas", String(quote.totalSeats), col2, y);
-  y += 40;
-
-  // ---------- Tabla de productos ----------
-  sectionTitle(doc, "DETALLE", M, y);
-  y += 16;
-
-  // encabezado de tabla
-  const cCupos = right - 200;
-  const cUnit = right - 110;
-  const cSub = right;
-  doc.setFillColor(...LIENZO);
-  doc.rect(M, y, right - M, 22, "F");
-  doc.setTextColor(...LABEL);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text("PRODUCTO", M + 8, y + 14);
-  doc.text("CUPOS", cCupos, y + 14, { align: "right" });
-  doc.text("PRECIO/PERSONA", cUnit, y + 14, { align: "right" });
-  doc.text("SUBTOTAL", cSub - 8, y + 14, { align: "right" });
-  y += 22;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  quote.items.forEach((li) => {
-    const typeLabel = PRODUCT_TYPE_LABEL[li.productType] ?? "";
-    const rowH = 30;
-
-    doc.setTextColor(...BRASA);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(li.productName, M + 8, y + 14);
-    if (typeLabel) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...MUTED);
-      doc.text(typeLabel, M + 8, y + 25);
+    // Una o varias páginas según el alto del contenido.
+    let heightLeft = imgH;
+    let position = 0;
+    pdf.addImage(img, "PNG", 0, position, pageW, imgH);
+    heightLeft -= pageH;
+    while (heightLeft > 0) {
+      position -= pageH;
+      pdf.addPage();
+      pdf.addImage(img, "PNG", 0, position, pageW, imgH);
+      heightLeft -= pageH;
     }
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(...BRASA);
-    doc.text(String(li.seats), cCupos, y + 14, { align: "right" });
-    doc.text(formatMoney(li.finalPerSeat, currency), cUnit, y + 14, {
-      align: "right",
-    });
-    doc.setFont("helvetica", "bold");
-    doc.text(formatMoney(li.subtotal, currency), cSub - 8, y + 14, {
-      align: "right",
-    });
-
-    y += rowH;
-    doc.setDrawColor(...LINE);
-    doc.line(M, y, right, y);
-  });
-
-  y += 18;
-
-  // ---------- Desglose de descuentos (derecha) ----------
-  const dxLabel = right - 200;
-  const dxVal = right;
-  doc.setFontSize(9);
-
-  breakdownRow(doc, "Precio de lista", formatMoney(quote.listTotal, currency), dxLabel, dxVal, y, MUTED);
-  y += 18;
-  breakdownRow(doc, `Descuento web (${pct(quote.webDiscount)})`, "incluido", dxLabel, dxVal, y, ORANGE);
-  y += 18;
-  if (quote.corporateDiscount > 0) {
-    breakdownRow(doc, `Corporativo (+${pct(quote.corporateDiscount)})`, "aplicado", dxLabel, dxVal, y, ORANGE);
-    y += 18;
+    pdf.save(`${safeFileName(contact.company)}-cotizacion-coderhouse.pdf`);
+  } finally {
+    document.body.removeChild(container);
   }
-  if (quote.alianzasApplied) {
-    breakdownRow(doc, `Alianzas (+${pct(quote.alianzasDiscount)})`, "aplicado", dxLabel, dxVal, y, ORANGE);
-    y += 18;
-  }
-  y += 6;
-
-  // ---------- Total destacado ----------
-  const boxH = 64;
-  const boxLeft = right - 300;
-  doc.setFillColor(...LIENZO);
-  doc.roundedRect(boxLeft, y, right - boxLeft, boxH, 8, 8, "F");
-  doc.setTextColor(...LABEL);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("TOTAL ESTIMADO", boxLeft + 16, y + 26);
-  doc.setTextColor(...BRASA);
-  doc.setFontSize(20);
-  doc.text(formatMoney(quote.finalTotal, currency), right - 16, y + 30, {
-    align: "right",
-  });
-  if (quote.totalSavings > 0) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...OKGREEN);
-    doc.text(
-      `Ahorrás ${formatMoney(quote.totalSavings, currency)} sobre el precio de lista`,
-      right - 16,
-      y + 50,
-      { align: "right" },
-    );
-  }
-  y += boxH + 24;
-
-  // ---------- Forma de pago ----------
-  sectionTitle(doc, "FORMA DE PAGO", M, y);
-  y += 16;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(...LABEL);
-  doc.text(doc.splitTextToSize(quote.paymentNote, right - M), M, y);
-
-  // ---------- Footer ----------
-  const H = doc.internal.pageSize.getHeight();
-  doc.setDrawColor(...LINE);
-  doc.line(M, H - 56, right, H - 56);
-  doc.setFontSize(8);
-  doc.setTextColor(...MUTED);
-  doc.text(
-    "Estimación orientativa según precios de lista vigentes. El equipo de empresas de Coderhouse confirma el presupuesto final.",
-    M,
-    H - 40,
-    { maxWidth: right - M },
-  );
-
-  return doc;
-}
-
-// ---------- helpers ----------
-
-function sectionTitle(doc: jsPDF, text: string, x: number, y: number) {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...MUTED);
-  doc.text(text, x, y);
-}
-
-function field(
-  doc: jsPDF,
-  label: string,
-  value: string,
-  x: number,
-  y: number,
-) {
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...MUTED);
-  doc.text(label.toUpperCase(), x, y);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...BRASA);
-  doc.text(value, x, y + 14);
-}
-
-function breakdownRow(
-  doc: jsPDF,
-  label: string,
-  value: string,
-  xLabel: number,
-  xVal: number,
-  y: number,
-  valueColor: [number, number, number],
-) {
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(...LABEL);
-  doc.text(label, xLabel, y);
-  doc.setTextColor(...valueColor);
-  doc.text(value, xVal, y, { align: "right" });
 }

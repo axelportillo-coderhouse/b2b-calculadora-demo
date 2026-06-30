@@ -137,11 +137,9 @@ export default function Calculator() {
     setResult(quote);
 
     // Descarga del PDF de la cotización (se genera en el cliente).
-    try {
-      generateQuotePdf(contact, quote);
-    } catch (err) {
+    void generateQuotePdf(contact, quote).catch((err) => {
       console.error("No se pudo generar el PDF:", err);
-    }
+    });
 
     // Aviso al equipo B2B (simulado en la demo).
     setSendState("sending");
@@ -189,7 +187,11 @@ export default function Calculator() {
         result={result}
         ticketId={ticketId}
         onReset={resetAll}
-        onDownloadPdf={() => generateQuotePdf(contact, result)}
+        onDownloadPdf={() => {
+          void generateQuotePdf(contact, result).catch((err) => {
+            console.error("No se pudo generar el PDF:", err);
+          });
+        }}
       />
     );
   }
