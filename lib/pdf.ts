@@ -89,7 +89,7 @@ export function buildQuoteHtml(
     <tr>
       <td style="padding:13px 0;border-bottom:1px solid ${C.line};vertical-align:top;">
         <div style="font-size:13px;font-weight:700;color:${C.ink};">${esc(li.productName)}</div>
-        <span style="display:inline-block;margin-top:5px;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:600;${CHIP[li.productType]}">${PRODUCT_TYPE_LABEL[li.productType]}</span>
+        <span style="display:inline-block;margin-top:7px;padding:4px 11px 5px;border-radius:999px;font-size:10px;font-weight:700;line-height:1;${CHIP[li.productType]}">${PRODUCT_TYPE_LABEL[li.productType]}</span>
       </td>
       <td style="padding:13px 0;border-bottom:1px solid ${C.line};text-align:right;font-size:13px;color:${C.ink};vertical-align:top;">${li.seats}</td>
       <td style="padding:13px 0;border-bottom:1px solid ${C.line};text-align:right;font-size:13px;color:${C.ink};vertical-align:top;">${formatMoney(li.finalPerSeat, c)}</td>
@@ -128,7 +128,7 @@ export function buildQuoteHtml(
     <table style="width:100%;border-collapse:collapse;margin-bottom:22px;">
       <tr>
         <td style="vertical-align:top;">
-          <div style="font-size:20px;font-weight:800;color:${C.ink};">Coderhouse <span style="font-weight:500;color:${C.muted};">Empresas</span></div>
+          <div style="font-size:20px;font-weight:800;color:${C.ink};">Coderhouse</div>
           <div style="font-size:12px;color:${C.muted};margin-top:3px;">Cotización de capacitación</div>
         </td>
         <td style="vertical-align:top;text-align:right;">
@@ -237,14 +237,23 @@ export async function generateQuotePdf(
     const pageH = pdf.internal.pageSize.getHeight();
     const imgH = (canvas.height * pageW) / canvas.width;
 
+    // Pinta toda la página de lienzo para que no quede blanco
+    // donde no llega el contenido.
+    const fillBg = () => {
+      pdf.setFillColor(249, 243, 233); // #f9f3e9
+      pdf.rect(0, 0, pageW, pageH, "F");
+    };
+
     // Una o varias páginas según el alto del contenido.
     let heightLeft = imgH;
     let position = 0;
+    fillBg();
     pdf.addImage(img, "PNG", 0, position, pageW, imgH);
     heightLeft -= pageH;
     while (heightLeft > 0) {
       position -= pageH;
       pdf.addPage();
+      fillBg();
       pdf.addImage(img, "PNG", 0, position, pageW, imgH);
       heightLeft -= pageH;
     }
