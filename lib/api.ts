@@ -21,8 +21,14 @@ import {
 
 export const DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
 
-/** URL del CSV publicado del Google Sheet (Publicar en la web → CSV). */
-const SHEET_CSV_URL = process.env.NEXT_PUBLIC_SHEET_CSV_URL || "";
+/**
+ * URL del Google Sheet en CSV. El export con el Sheet compartido como
+ * "cualquiera con el link" sirve CSV con CORS habilitado (Google refleja
+ * el origin). Se puede sobreescribir con NEXT_PUBLIC_SHEET_CSV_URL.
+ */
+const SHEET_CSV_URL =
+  process.env.NEXT_PUBLIC_SHEET_CSV_URL ||
+  "https://docs.google.com/spreadsheets/d/1UHQ58PDvbOHKQuSTv31-NbGaoNfxEI73swplOstdZpw/export?format=csv";
 
 export interface SubmitQuotePayload {
   contact: {

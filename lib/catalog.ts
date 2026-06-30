@@ -164,8 +164,12 @@ function slugify(s: string): string {
 }
 
 function toNumber(raw: string): number {
-  const digits = (raw || "").replace(/[^\d]/g, "");
-  return digits ? parseInt(digits, 10) : 0;
+  // Soporta "269555", "$269.555,0", "1.692" (formato es-AR: . miles, , decimal).
+  let s = (raw || "").replace(/[^\d.,]/g, "");
+  if (!s) return 0;
+  s = s.replace(/\./g, "").replace(",", "."); // saca miles, coma → punto decimal
+  const n = parseFloat(s);
+  return Number.isNaN(n) ? 0 : Math.round(n);
 }
 
 function normalizeType(raw: string): ProductType {
