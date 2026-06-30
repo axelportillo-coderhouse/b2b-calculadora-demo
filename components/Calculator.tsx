@@ -1,27 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  PRODUCTS,
   PRODUCT_TYPE_LABEL,
+  PRODUCT_TYPE_ORDER,
   type Product,
   type ProductType,
 } from "@/lib/catalog";
 import {
   calculateQuote,
   formatMoney,
-  CORPORATE_MIN_SEATS,
   type QuoteResult,
   type Region,
 } from "@/lib/pricing";
-import { api } from "@/lib/api";
+import { api, getCatalog } from "@/lib/api";
+import { generateQuotePdf } from "@/lib/pdf";
+import { detectRegion } from "@/lib/region";
 import NextSteps from "@/components/NextSteps";
 
 // --- estilos de chip por tipo de producto (usa tokens de tinte) ---
 const TYPE_CHIP: Record<ProductType, string> = {
   curso: "bg-tintor/10 text-tintor",
   carrera: "bg-tintamber/10 text-tintamber",
-  workshop: "bg-tintrosa/10 text-tintrosa",
+  diplomatura: "bg-tintrosa/10 text-tintrosa",
+  workshop: "bg-tintok/10 text-tintok",
 };
 
 interface Contact {
@@ -34,9 +36,10 @@ interface Contact {
 type Seats = Record<string, number>;
 type SendState = "idle" | "sending" | "sent" | "error";
 
-const GROUPS: ProductType[] = ["curso", "carrera", "workshop"];
-
 export default function Calculator() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
   const [contact, setContact] = useState<Contact>({
     fullName: "",
     email: "",
@@ -44,9 +47,28 @@ export default function Calculator() {
     website: "",
   });
   const [region, setRegion] = useState<Region>("AR");
-  const [alianzasCode, setAlianzasCode] = useState("");
+  const [query, setQuery] = useState("");
   const [seats, setSeats] = useState<Seats>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Región detectada desde la URL (país de la landing que nos embebe).
+  useEffect(() => {
+    setRegion(detectRegion());
+  }, []);
+
+  // Catálogo: Google Sheet en vivo (si está configurado) o fallback local.
+  useEffect(() => {
+    let active = true;
+    getCatalog().then(({ products }) => {
+      if (active) {
+        setProducts(products);
+        setCatalogLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [result, setResult] = useState<QuoteResult | null>(null);
   const [sendState, setSendState] = useState<SendState>("idle");
@@ -80,8 +102,8 @@ export default function Calculator() {
 
   function resetAll() {
     setContact({ fullName: "", email: "", company: "", website: "" });
-    setRegion("AR");
-    setAlianzasCode("");
+    setRegion(detectRegion());
+    setQuery("");
     setSeats({});
     setErrors({});
     setResult(null);
@@ -111,8 +133,15 @@ export default function Calculator() {
       .filter(([, n]) => n > 0)
       .map(([productId, n]) => ({ productId, seats: n }));
 
-    const quote = calculateQuote({ items, region, alianzasCode });
+    const quote = calculateQuote({ items, region, catalog: products });
     setResult(quote);
+
+    // Descarga del PDF de la cotización (se genera en el cliente).
+    try {
+      generateQuotePdf(contact, quote);
+    } catch (err) {
+      console.error("No se pudo generar el PDF:", err);
+    }
 
     // Aviso al equipo B2B (simulado en la demo).
     setSendState("sending");
@@ -121,7 +150,6 @@ export default function Calculator() {
       const data = await api.submitQuote({
         contact,
         region,
-        alianzasCode,
         items: quote.items.map((i) => ({
           productId: i.productId,
           productName: i.productName,
@@ -161,6 +189,7 @@ export default function Calculator() {
         result={result}
         ticketId={ticketId}
         onReset={resetAll}
+        onDownloadPdf={() => generateQuotePdf(contact, result)}
       />
     );
   }
@@ -179,28 +208,16 @@ export default function Calculator() {
           }}
         />
 
-        <RegionSection region={region} onChange={(r) => {
-          setRegion(r);
-          setResult(null);
-          setSendState("idle");
-        }} />
-
         <ProductsSection
+          products={products}
+          loading={catalogLoading}
           seats={seats}
           error={errors.products}
+          query={query}
+          onQueryChange={setQuery}
           onToggle={toggleProduct}
           onSeats={setSeatsFor}
           region={region}
-        />
-
-        <AlianzasSection
-          region={region}
-          code={alianzasCode}
-          onChange={(v) => {
-            setAlianzasCode(v);
-            setResult(null);
-            setSendState("idle");
-          }}
         />
       </div>
 
@@ -210,10 +227,10 @@ export default function Calculator() {
           result={result}
           totalSeats={totalSeats}
           selectedCount={selectedCount}
-          region={region}
           onCalculate={handleCalculate}
           sendState={sendState}
           sendMessage={sendMessage}
+          disabled={catalogLoading}
         />
       </aside>
     </div>
@@ -315,96 +332,121 @@ function ContactSection({
   );
 }
 
-function RegionSection({
-  region,
-  onChange,
-}: {
-  region: Region;
-  onChange: (r: Region) => void;
-}) {
-  const options: { value: Region; label: string; hint: string }[] = [
-    { value: "AR", label: "Argentina", hint: "Factura + transferencia a 30 días · ARS" },
-    { value: "EXT", label: "Exterior", hint: "Pago con tarjeta · USD" },
-  ];
-  return (
-    <Card title="¿Desde dónde comprás?" subtitle="Define la moneda y los descuentos aplicables.">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {options.map((o) => {
-          const active = region === o.value;
-          return (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => onChange(o.value)}
-              className={`rounded-lg border p-4 text-left transition-colors ${
-                active
-                  ? "border-horizonte bg-tintor/5"
-                  : "border-line-strong bg-card hover:border-horizonte"
-              }`}
-            >
-              <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-                <span
-                  className={`grid h-4 w-4 place-items-center rounded-full border-2 ${
-                    active ? "border-horizonte" : "border-line-strong"
-                  }`}
-                >
-                  {active && <span className="h-2 w-2 rounded-full bg-horizonte" />}
-                </span>
-                {o.label}
-              </span>
-              <span className="mt-1.5 block text-xs text-muted">{o.hint}</span>
-            </button>
-          );
-        })}
-      </div>
-    </Card>
-  );
+function normalizeText(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function ProductsSection({
+  products,
+  loading,
   seats,
   error,
+  query,
+  onQueryChange,
   onToggle,
   onSeats,
   region,
 }: {
+  products: Product[];
+  loading: boolean;
   seats: Seats;
   error?: string;
+  query: string;
+  onQueryChange: (v: string) => void;
   onToggle: (id: string) => void;
   onSeats: (id: string, value: number) => void;
   region: Region;
 }) {
+  const q = normalizeText(query.trim());
+  const filtered = q
+    ? products.filter((p) => normalizeText(p.name).includes(q))
+    : products;
+
+  // Grupos presentes en el catálogo filtrado, en el orden definido.
+  const groups = PRODUCT_TYPE_ORDER.filter((type) =>
+    filtered.some((p) => p.type === type),
+  );
+
   return (
     <Card
       title="Productos"
-      subtitle="Elegí uno o más cursos, carreras o workshops e indicá cuántas personas."
+      subtitle="Elegí uno o más cursos o carreras e indicá cuántas personas."
     >
       {error && (
         <p className="mb-4 rounded-lg bg-energia/10 px-3 py-2 text-sm text-energia">
           {error}
         </p>
       )}
-      <div className="space-y-6">
-        {GROUPS.map((type) => (
-          <div key={type}>
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
-              {PRODUCT_TYPE_LABEL[type]}s
-            </h3>
-            <div className="space-y-2.5">
-              {PRODUCTS.filter((p) => p.type === type).map((p) => (
-                <ProductRow
-                  key={p.id}
-                  product={p}
-                  region={region}
-                  seats={seats[p.id] || 0}
-                  onToggle={() => onToggle(p.id)}
-                  onSeats={(v) => onSeats(p.id, v)}
-                />
+
+      {loading ? (
+        <p className="text-sm text-muted">Cargando catálogo…</p>
+      ) : products.length === 0 ? (
+        <p className="text-sm text-muted">
+          No se pudo cargar el catálogo. Intentá recargar la página.
+        </p>
+      ) : (
+        <>
+          {/* Buscador */}
+          <div className="relative mb-5">
+            <svg
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted"
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              placeholder="Buscar curso o carrera…"
+              className="w-full rounded-lg border border-line-strong bg-card py-2.5 pl-10 pr-9 text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-horizonte"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => onQueryChange("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-muted hover:text-ink"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {groups.length === 0 ? (
+            <p className="text-sm text-muted">
+              No encontramos productos para “{query}”.
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {groups.map((type) => (
+                <div key={type}>
+                  <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
+                    {PRODUCT_TYPE_LABEL[type]}s
+                  </h3>
+                  <div className="space-y-2.5">
+                    {filtered
+                      .filter((p) => p.type === type)
+                      .map((p) => (
+                        <ProductRow
+                          key={p.id}
+                          product={p}
+                          region={region}
+                          seats={seats[p.id] || 0}
+                          onToggle={() => onToggle(p.id)}
+                          onSeats={(v) => onSeats(p.id, v)}
+                        />
+                      ))}
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </>
+      )}
     </Card>
   );
 }
@@ -511,31 +553,6 @@ function Stepper({
   );
 }
 
-function AlianzasSection({
-  region,
-  code,
-  onChange,
-}: {
-  region: Region;
-  code: string;
-  onChange: (v: string) => void;
-}) {
-  if (region !== "AR") return null;
-  return (
-    <Card
-      title="¿Tenés un código de Alianzas?"
-      subtitle="Opcional. El equipo de Alianzas entrega un código que suma 20% adicional."
-    >
-      <input
-        className={`${inputClass} max-w-xs uppercase`}
-        value={code}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Ej: ALIANZAS20"
-      />
-    </Card>
-  );
-}
-
 /* ------------------------------------------------------------ */
 /* Resumen / resultado                                           */
 /* ------------------------------------------------------------ */
@@ -544,18 +561,18 @@ function Summary({
   result,
   totalSeats,
   selectedCount,
-  region,
   onCalculate,
   sendState,
   sendMessage,
+  disabled,
 }: {
   result: QuoteResult | null;
   totalSeats: number;
   selectedCount: number;
-  region: Region;
   onCalculate: () => void;
   sendState: SendState;
   sendMessage: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-line bg-card p-6">
@@ -574,10 +591,16 @@ function Summary({
       <button
         type="button"
         onClick={onCalculate}
-        disabled={sendState === "sending"}
+        disabled={sendState === "sending" || disabled}
         className="mt-5 w-full rounded-lg bg-btn px-4 py-3 text-sm font-bold text-surface transition-colors hover:bg-btn-hover disabled:opacity-60"
       >
-        {sendState === "sending" ? "Calculando…" : result ? "Recalcular y reenviar" : "Calcular"}
+        {sendState === "sending"
+          ? "Calculando…"
+          : disabled
+            ? "Cargando catálogo…"
+            : result
+              ? "Recalcular y reenviar"
+              : "Calcular"}
       </button>
 
       {sendState === "sent" && (
@@ -636,16 +659,6 @@ function ResultBody({ result }: { result: QuoteResult }) {
             value="aplicado"
             tint="tintamber"
           />
-        )}
-        {result.alianzasApplied && (
-          <Row
-            label={`Alianzas +${pct(result.alianzasDiscount)}`}
-            value="aplicado"
-            tint="tintrosa"
-          />
-        )}
-        {result.alianzasInvalid && (
-          <Row label="Código de Alianzas" value="inválido" tint="energia" />
         )}
       </dl>
 

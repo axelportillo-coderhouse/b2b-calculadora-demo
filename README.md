@@ -32,9 +32,42 @@ lista se aplica, en cascada multiplicativa:
 - Código de Alianzas válido para la demo: `ALIANZAS20` o `CODER-ALIANZA`.
 
 Todo está parametrizado en [`lib/pricing.ts`](lib/pricing.ts) (porcentajes,
-umbral de cupos, códigos válidos) y el catálogo en
-[`lib/catalog.ts`](lib/catalog.ts) (productos y precios de lista, **datos de
-ejemplo** fáciles de editar).
+umbral de cupos, códigos válidos).
+
+## Catálogo desde Google Sheet
+
+Los cursos y precios salen de un Google Sheet publicado como CSV, leído **en
+vivo desde el navegador** (funciona también en la demo estática).
+
+**Cómo conectarlo:**
+
+1. En el Sheet: **Archivo → Compartir → Publicar en la web → (hoja) → CSV**.
+2. Copiar la URL del CSV.
+3. Definir la variable de entorno al buildear/correr:
+   ```bash
+   NEXT_PUBLIC_SHEET_CSV_URL="https://docs.google.com/.../pub?output=csv"
+   ```
+
+Si la variable no está seteada o falla la lectura, la herramienta usa el
+**catálogo de respaldo** en [`lib/catalog.ts`](lib/catalog.ts) (subconjunto de
+productos reales). El parser está en `parseCatalogCsv` y soporta el formato real
+del Sheet de Ventas B2B:
+
+- 3 filas de encabezado (la fila de monedas: `…,ARS,,CLP,,…,USD,,UYU`).
+- Columnas `title`, `type`, `duration` y, por cada moneda, `Amount` (precio
+  local) + `Amount USD`.
+- Hoy se usan **ARS** (Argentina) y **USD** (Exterior); el resto de monedas
+  quedan disponibles para el futuro.
+- `type` admite: `Curso`, `Carrera`, `Diplomatura` (y `Workshop`).
+
+Los precios del Sheet son de **lista**; la herramienta aplica la cascada de
+descuentos descrita arriba.
+
+## Embeber en la landing de Framer
+
+La herramienta es una página standalone pensada para embeberse como **iframe**
+dentro de la landing de Framer (bloque "Embed" → pegar la URL de la demo). Por
+eso no tiene encabezado propio ni título: arranca directo en el formulario.
 
 ## Correr la demo
 

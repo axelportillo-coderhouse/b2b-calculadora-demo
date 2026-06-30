@@ -12,7 +12,7 @@
 //   descontado de la web" (cascada multiplicativa).
 // ============================================================
 
-import { getProduct } from "./catalog";
+import { getProduct, PRODUCTS, type Product, type ProductType } from "./catalog";
 
 export type Region = "AR" | "EXT";
 export type Currency = "ARS" | "USD";
@@ -26,11 +26,14 @@ export interface QuoteInput {
   items: QuoteItemInput[];
   region: Region;
   alianzasCode?: string;
+  /** Catálogo a usar para los precios. Default: catálogo local. */
+  catalog?: Product[];
 }
 
 export interface QuoteLineItem {
   productId: string;
   productName: string;
+  productType: ProductType;
   seats: number;
   /** Precio de lista por persona (sin descuentos). */
   listPerSeat: number;
@@ -110,8 +113,10 @@ export function calculateQuote(input: QuoteInput): QuoteResult {
   const alianzasApplied = region === "AR" && alianzasValid;
   const alianzasDiscount = alianzasApplied ? ALIANZAS_DISCOUNT : 0;
 
+  const catalog = input.catalog ?? PRODUCTS;
+
   const lineItems: QuoteLineItem[] = items.map((item) => {
-    const product = getProduct(item.productId);
+    const product = getProduct(item.productId, catalog);
     const listPerSeat = product
       ? region === "AR"
         ? product.listPriceARS
@@ -128,6 +133,7 @@ export function calculateQuote(input: QuoteInput): QuoteResult {
     return {
       productId: item.productId,
       productName: product?.name ?? item.productId,
+      productType: product?.type ?? "curso",
       seats: item.seats,
       listPerSeat: round(listPerSeat),
       finalPerSeat: round(finalPerSeat),

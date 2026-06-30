@@ -12,7 +12,17 @@
 // cliente, así que no necesita swap: funciona igual en ambos.
 // ============================================================
 
+import {
+  PRODUCTS,
+  QUOTABLE_TYPES,
+  parseCatalogCsv,
+  type Product,
+} from "./catalog";
+
 export const DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
+
+/** URL del CSV publicado del Google Sheet (Publicar en la web → CSV). */
+const SHEET_CSV_URL = process.env.NEXT_PUBLIC_SHEET_CSV_URL || "";
 
 export interface SubmitQuotePayload {
   contact: {
@@ -45,6 +55,40 @@ const B2B_INBOX = "empresas@coderhouse.com";
 
 function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+export interface CatalogResult {
+  products: Product[];
+  /** De dónde salieron los datos: el Sheet en vivo o el fallback local. */
+  source: "sheet" | "fallback";
+}
+
+/**
+ * Catálogo de productos. Si hay un Sheet configurado
+ * (NEXT_PUBLIC_SHEET_CSV_URL), lo lee en vivo; si no está
+ * configurado o falla la lectura, usa el catálogo local de respaldo.
+ * Funciona igual en la demo estática (fetch desde el navegador).
+ */
+/** Solo cotizamos cursos y carreras (no diplomaturas ni workshops). */
+function onlyQuotable(products: Product[]): Product[] {
+  return products.filter((p) => QUOTABLE_TYPES.includes(p.type));
+}
+
+export async function getCatalog(): Promise<CatalogResult> {
+  if (!SHEET_CSV_URL) {
+    return { products: onlyQuotable(PRODUCTS), source: "fallback" };
+  }
+  try {
+    const res = await fetch(SHEET_CSV_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const csv = await res.text();
+    const products = onlyQuotable(parseCatalogCsv(csv));
+    if (products.length === 0) throw new Error("CSV sin productos válidos");
+    return { products, source: "sheet" };
+  } catch (err) {
+    console.error("[catalog] No se pudo leer el Sheet, uso fallback:", err);
+    return { products: onlyQuotable(PRODUCTS), source: "fallback" };
+  }
 }
 
 interface QuoteApi {

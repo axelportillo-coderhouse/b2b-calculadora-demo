@@ -49,12 +49,14 @@ export default function NextSteps({
   result,
   ticketId,
   onReset,
+  onDownloadPdf,
 }: {
   fullName: string;
   company: string;
   result: QuoteResult;
   ticketId: string;
   onReset: () => void;
+  onDownloadPdf: () => void;
 }) {
   const steps = buildSteps(result.region);
   const firstName = fullName.trim().split(/\s+/)[0] || "";
@@ -121,11 +123,23 @@ export default function NextSteps({
         orientativa: el equipo de empresas confirma el presupuesto final.
       </p>
 
-      <div className="text-center">
+      <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={onDownloadPdf}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-btn px-6 py-3 text-sm font-bold text-surface transition-colors hover:bg-btn-hover sm:w-auto"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Descargar cotización (PDF)
+        </button>
         <button
           type="button"
           onClick={onReset}
-          className="rounded-lg border border-line-strong bg-card px-6 py-3 text-sm font-bold text-ink transition-colors hover:border-horizonte"
+          className="w-full rounded-lg border border-line-strong bg-card px-6 py-3 text-sm font-bold text-ink transition-colors hover:border-horizonte sm:w-auto"
         >
           Hacer otra cotización
         </button>
