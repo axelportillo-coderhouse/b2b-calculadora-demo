@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney, type QuoteResult } from "@/lib/pricing";
+import { formatMoney, priceDisclaimer, type QuoteResult } from "@/lib/pricing";
 
 interface Step {
   title: string;
@@ -8,18 +8,10 @@ interface Step {
 }
 
 function buildSteps(region: "AR" | "EXT"): Step[] {
-  const payment: Step =
-    region === "AR"
-      ? {
-          title: "Factura y pago",
-          detail:
-            "El equipo de Pagos te envía la factura. Pagás por transferencia (hasta 30 días) o con tarjeta vía link de pago.",
-        }
-      : {
-          title: "Factura y pago",
-          detail:
-            "Recibís la factura y pagás con tarjeta en USD mediante un link de pago.",
-        };
+  const payment: Step = {
+    title: "Factura y pago",
+    detail: "El equipo de Pagos te envía la factura para coordinar el pago.",
+  };
 
   return [
     {
@@ -119,8 +111,7 @@ export default function NextSteps({
 
       {/* Nota + acción */}
       <p className="px-1 text-center text-xs text-muted">
-        Te enviamos una copia de esta cotización a tu mail. La estimación es
-        orientativa: el equipo de empresas confirma el presupuesto final.
+        {priceDisclaimer(result.region)}
       </p>
 
       <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">

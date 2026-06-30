@@ -10,6 +10,7 @@ import {
 import {
   calculateQuote,
   formatMoney,
+  priceDisclaimer,
   type QuoteResult,
   type Region,
 } from "@/lib/pricing";
@@ -36,6 +37,24 @@ interface Contact {
 type Seats = Record<string, number>;
 type SendState = "idle" | "sending" | "sent" | "error";
 
+// Precarga de datos SOLO en testing (dev local o ?test=1), para no
+// tener que completar el form en cada prueba. En la demo real (build
+// de producción sin el flag) el formulario arranca vacío.
+const PREFILL: Contact = {
+  fullName: "Axel Portillo",
+  email: "axel@empresademo.com",
+  company: "Empresa Demo",
+  website: "www.empresademo.com",
+};
+
+function isPrefill(): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+  if (typeof window !== "undefined") {
+    return new URLSearchParams(window.location.search).get("test") === "1";
+  }
+  return false;
+}
+
 export default function Calculator() {
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -56,6 +75,11 @@ export default function Calculator() {
     setRegion(detectRegion());
   }, []);
 
+  // Precarga de datos en modo testing.
+  useEffect(() => {
+    if (isPrefill()) setContact(PREFILL);
+  }, []);
+
   // Catálogo: Google Sheet en vivo (si está configurado) o fallback local.
   useEffect(() => {
     let active = true;
@@ -63,6 +87,10 @@ export default function Calculator() {
       if (active) {
         setProducts(products);
         setCatalogLoading(false);
+        // En testing, preselecciona el primer producto para probar de una.
+        if (isPrefill() && products.length) {
+          setSeats((s) => (Object.keys(s).length ? s : { [products[0].id]: 2 }));
+        }
       }
     });
     return () => {
@@ -134,6 +162,12 @@ export default function Calculator() {
       .map(([productId, n]) => ({ productId, seats: n }));
 
     const quote = calculateQuote({ items, region, catalog: products });
+
+    // Estado de cálculo con una breve demora (no instantáneo).
+    setResult(null);
+    setSendMessage("");
+    setSendState("sending");
+    await new Promise((r) => setTimeout(r, 1400));
     setResult(quote);
 
     // Descarga del PDF de la cotización (se genera en el cliente).
@@ -142,8 +176,6 @@ export default function Calculator() {
     });
 
     // Aviso al equipo B2B (simulado en la demo).
-    setSendState("sending");
-    setSendMessage("");
     try {
       const data = await api.submitQuote({
         contact,
@@ -580,7 +612,12 @@ function Summary({
     <div className="rounded-2xl border border-line bg-card p-6">
       <h2 className="text-base font-bold text-ink">Resumen de tu cotización</h2>
 
-      {!result ? (
+      {sendState === "sending" && !result ? (
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 py-6">
+          <span className="h-7 w-7 animate-spin rounded-full border-2 border-line-strong border-t-horizonte" />
+          <p className="text-sm text-muted">Calculando tu cotización…</p>
+        </div>
+      ) : !result ? (
         <p className="mt-2 text-sm text-muted">
           {selectedCount > 0
             ? `${selectedCount} producto(s) · ${totalSeats} persona(s) seleccionada(s).`
@@ -605,21 +642,11 @@ function Summary({
               : "Calcular"}
       </button>
 
-      {sendState === "sent" && (
-        <p className="mt-3 rounded-lg bg-tintok/10 px-3 py-2.5 text-xs font-medium text-tintok">
-          ✓ {sendMessage}
-        </p>
-      )}
       {sendState === "error" && (
         <p className="mt-3 rounded-lg bg-energia/10 px-3 py-2.5 text-xs font-medium text-energia">
           {sendMessage}
         </p>
       )}
-
-      <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
-        Estimación orientativa según precios de lista vigentes. El equipo de
-        empresas confirma el presupuesto final.
-      </p>
     </div>
   );
 }
@@ -647,23 +674,6 @@ function ResultBody({ result }: { result: QuoteResult }) {
 
       <div className="h-px bg-line" />
 
-      {/* desglose de descuentos */}
-      <dl className="space-y-1.5 text-sm">
-        <Row label="Precio de lista" value={formatMoney(result.listTotal, c)} muted />
-        <Row
-          label={`Descuento web (${pct(result.webDiscount)})`}
-          value={`incluido`}
-          tint="tintor"
-        />
-        {result.corporateDiscount > 0 && (
-          <Row
-            label={`Corporativo +${pct(result.corporateDiscount)} (${result.totalSeats} cupos)`}
-            value="aplicado"
-            tint="tintamber"
-          />
-        )}
-      </dl>
-
       <div className="rounded-xl bg-tintok/10 p-4">
         <div className="flex items-baseline justify-between">
           <span className="text-sm font-semibold text-ink">Total estimado</span>
@@ -671,46 +681,9 @@ function ResultBody({ result }: { result: QuoteResult }) {
             {formatMoney(result.finalTotal, c)}
           </span>
         </div>
-        {result.totalSavings > 0 && (
-          <p className="mt-1 text-xs font-medium text-tintok">
-            Ahorrás {formatMoney(result.totalSavings, c)} sobre el precio de lista.
-          </p>
-        )}
       </div>
 
-      <p className="text-xs text-muted">{result.paymentNote}</p>
+      <p className="text-xs text-muted">{priceDisclaimer(result.region)}</p>
     </div>
   );
-}
-
-const TINT_TEXT = {
-  tintor: "text-tintor",
-  tintamber: "text-tintamber",
-  tintrosa: "text-tintrosa",
-  tintok: "text-tintok",
-  energia: "text-energia",
-} as const;
-
-function Row({
-  label,
-  value,
-  muted,
-  tint,
-}: {
-  label: string;
-  value: string;
-  muted?: boolean;
-  tint?: keyof typeof TINT_TEXT;
-}) {
-  const tintClass = tint ? TINT_TEXT[tint] : muted ? "text-muted" : "text-ink";
-  return (
-    <div className="flex items-center justify-between">
-      <dt className={muted ? "text-muted" : "text-label"}>{label}</dt>
-      <dd className={`font-medium ${tintClass}`}>{value}</dd>
-    </div>
-  );
-}
-
-function pct(n: number): string {
-  return `${Math.round(n * 100)}%`;
 }

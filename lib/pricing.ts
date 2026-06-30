@@ -168,6 +168,17 @@ export function calculateQuote(input: QuoteInput): QuoteResult {
   };
 }
 
+/**
+ * Único disclaimer permitido en la cotización.
+ *   Argentina  → precio final con IVA incluido.
+ *   Exterior   → el cobro se realiza en USD.
+ */
+export function priceDisclaimer(region: Region): string {
+  return region === "AR"
+    ? "Precio final con IVA incluido."
+    : "Los valores se cobran en dólares (USD).";
+}
+
 export function formatMoney(amount: number, currency: Currency): string {
   const locale = currency === "ARS" ? "es-AR" : "en-US";
   return new Intl.NumberFormat(locale, {

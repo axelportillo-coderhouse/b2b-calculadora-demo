@@ -9,7 +9,7 @@
 
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
-import { formatMoney, type QuoteResult } from "./pricing";
+import { formatMoney, priceDisclaimer, type QuoteResult } from "./pricing";
 import { PRODUCT_TYPE_LABEL, type ProductType } from "./catalog";
 
 interface Contact {
@@ -142,6 +142,8 @@ export function buildQuoteHtml(
           </td>
         </tr>
       </table>
+
+      <div style="margin-top:14px;font-size:11px;color:${C.muted};">${esc(priceDisclaimer(quote.region))}</div>
     </div>
   </div>`;
 }
