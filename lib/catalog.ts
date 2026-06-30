@@ -124,7 +124,7 @@ export const PRODUCT_TYPE_LABEL: Record<ProductType, string> = {
 export const QUOTABLE_TYPES: ProductType[] = ["carrera", "curso"];
 
 /** Orden en que se muestran los grupos de productos. */
-export const PRODUCT_TYPE_ORDER: ProductType[] = ["carrera", "curso"];
+export const PRODUCT_TYPE_ORDER: ProductType[] = ["curso", "carrera"];
 
 export function getProduct(
   id: string,

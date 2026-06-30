@@ -394,6 +394,9 @@ function ProductsSection({
   onSeats: (id: string, value: number) => void;
   region: Region;
 }) {
+  const [expanded, setExpanded] = useState<Set<ProductType>>(new Set());
+  const COLLAPSED_LIMIT = 5;
+
   const q = normalizeText(query.trim());
   const filtered = q
     ? products.filter((p) => normalizeText(p.name).includes(q))
@@ -403,6 +406,8 @@ function ProductsSection({
   const groups = PRODUCT_TYPE_ORDER.filter((type) =>
     filtered.some((p) => p.type === type),
   );
+
+  const searching = q.length > 0;
 
   return (
     <Card
@@ -456,15 +461,21 @@ function ProductsSection({
             </p>
           ) : (
             <div className="space-y-6">
-              {groups.map((type) => (
-                <div key={type}>
-                  <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
-                    {PRODUCT_TYPE_LABEL[type]}s
-                  </h3>
-                  <div className="space-y-2.5">
-                    {filtered
-                      .filter((p) => p.type === type)
-                      .map((p) => (
+              {groups.map((type) => {
+                const groupItems = filtered.filter((p) => p.type === type);
+                const isOpen = searching || expanded.has(type);
+                const visible = isOpen
+                  ? groupItems
+                  : groupItems.slice(0, COLLAPSED_LIMIT);
+                const hidden = groupItems.length - visible.length;
+
+                return (
+                  <div key={type}>
+                    <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
+                      {PRODUCT_TYPE_LABEL[type]}s
+                    </h3>
+                    <div className="space-y-2.5">
+                      {visible.map((p) => (
                         <ProductRow
                           key={p.id}
                           product={p}
@@ -474,9 +485,29 @@ function ProductsSection({
                           onSeats={(v) => onSeats(p.id, v)}
                         />
                       ))}
+                    </div>
+
+                    {!searching && (hidden > 0 || expanded.has(type)) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpanded((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(type)) next.delete(type);
+                            else next.add(type);
+                            return next;
+                          })
+                        }
+                        className="mt-3 text-sm font-semibold text-tintor hover:text-horizonte"
+                      >
+                        {expanded.has(type)
+                          ? "Mostrar menos"
+                          : `Mostrar ${hidden} más`}
+                      </button>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
